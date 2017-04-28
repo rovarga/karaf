@@ -18,6 +18,7 @@ package org.apache.karaf.features.internal.model;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
@@ -36,6 +37,7 @@ import org.apache.karaf.features.Feature;
         "bundle"
         })
 public class Conditional extends Content implements org.apache.karaf.features.Conditional {
+    private static final Pattern ID_REPLACE_PATTERN = Pattern.compile("[^A-Za-z0-9 ]");
 
     @XmlElement(name = "condition", namespace=org.apache.karaf.features.FeaturesNamespaces.URI_CURRENT)
     protected List<String> condition;
@@ -51,6 +53,7 @@ public class Conditional extends Content implements org.apache.karaf.features.Co
         this.owner = owner;
     }
 
+    @Override
     public List<String> getCondition() {
         if (condition == null) {
             this.condition = new ArrayList<>();
@@ -65,7 +68,7 @@ public class Conditional extends Content implements org.apache.karaf.features.Co
         }
         String name = owner.getName();
         String version = owner.getVersion();
-        String conditionName = name + "-condition-" + getConditionId().replaceAll("[^A-Za-z0-9 ]", "_");
+        String conditionName = name + "-condition-" + ID_REPLACE_PATTERN.matcher(getConditionId()).replaceAll("_");
         org.apache.karaf.features.internal.model.Feature f = new org.apache.karaf.features.internal.model.Feature(conditionName, version);
         f.getBundle().addAll(getBundle());
         f.getConfig().addAll(getConfig());

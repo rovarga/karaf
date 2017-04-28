@@ -1,7 +1,7 @@
 /*
  * Copyright 2007 Alin Dreghiciu.
  * Copyright 2010,2011 Toni Menzel.
- * 
+ *
  * Licensed  under the  Apache License,  Version 2.0  (the "License");
  * you may not use  this file  except in  compliance with the License.
  * You may obtain a copy of the License at
@@ -20,6 +20,7 @@ package org.apache.karaf.util.maven;
 
 import java.net.MalformedURLException;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * Parser for mvn: protocol.
@@ -68,6 +69,11 @@ public class Parser
      * Group id path separator.
      */
     private static final String GROUP_SEPARATOR = "\\.";
+    /**
+     * Pre-compiled group id path separator pattern.
+     */
+    private static final Pattern GROUP_SEPARATOR_PATTERN = Pattern.compile(GROUP_SEPARATOR);
+
     /**
      * Separator used to constructs the artifact file name.
      */
@@ -166,7 +172,7 @@ public class Parser
         Parser parser = new Parser(uri.substring("mvn:".length()));
         if (resolved != null) {
             String grp = FILE_SEPARATOR
-                    + parser.getGroup().replaceAll(GROUP_SEPARATOR, FILE_SEPARATOR)
+                    + GROUP_SEPARATOR_PATTERN.matcher(parser.getGroup()).replaceAll(FILE_SEPARATOR)
                     + FILE_SEPARATOR
                     + parser.getArtifact()
                     + FILE_SEPARATOR;
@@ -253,7 +259,7 @@ public class Parser
         {
             throw new MalformedURLException( "Invalid artifactId. Syntax " + SYNTAX );
         }
-        // version is optional but we have a default value 
+        // version is optional but we have a default value
         m_version = VERSION_LATEST;
         if( segments.length >= 3 && segments[ 2 ].trim().length() > 0 )
         {
@@ -272,6 +278,10 @@ public class Parser
             m_classifier = segments[ 4 ];
             m_fullClassifier = CLASSIFIER_SEPARATOR + m_classifier;
         }
+    }
+
+    private String groupAsPath() {
+        return GROUP_SEPARATOR_PATTERN.matcher( m_group ).replaceAll( FILE_SEPARATOR );
     }
 
     /**
@@ -353,7 +363,7 @@ public class Parser
     public String getArtifactPath( final String version )
     {
         return new StringBuilder()
-                .append( m_group.replaceAll( GROUP_SEPARATOR, FILE_SEPARATOR ) )
+                .append( groupAsPath() )
                 .append( FILE_SEPARATOR )
                 .append( m_artifact )
                 .append( FILE_SEPARATOR )
@@ -392,7 +402,7 @@ public class Parser
     public String getSnapshotPath( final String version, final String timestamp, final String buildnumber )
     {
         return new StringBuilder()
-                .append( m_group.replaceAll( GROUP_SEPARATOR, FILE_SEPARATOR ) )
+                .append( groupAsPath() )
                 .append( FILE_SEPARATOR )
                 .append( m_artifact )
                 .append( FILE_SEPARATOR )
@@ -416,7 +426,7 @@ public class Parser
     public String getVersionMetadataPath( final String version )
     {
         return new StringBuilder()
-                .append( m_group.replaceAll( GROUP_SEPARATOR, FILE_SEPARATOR ) )
+                .append( groupAsPath() )
                 .append( FILE_SEPARATOR )
                 .append( m_artifact )
                 .append( FILE_SEPARATOR )
@@ -435,7 +445,7 @@ public class Parser
     public String getVersionLocalMetadataPath( final String version )
     {
         return new StringBuilder()
-                .append( m_group.replaceAll( GROUP_SEPARATOR, FILE_SEPARATOR ) )
+                .append( groupAsPath() )
                 .append( FILE_SEPARATOR )
                 .append( m_artifact )
                 .append( FILE_SEPARATOR )
@@ -453,7 +463,7 @@ public class Parser
     public String getArtifactLocalMetdataPath()
     {
         return new StringBuilder()
-                .append( m_group.replaceAll( GROUP_SEPARATOR, FILE_SEPARATOR ) )
+                .append( groupAsPath() )
                 .append( FILE_SEPARATOR )
                 .append( m_artifact )
                 .append( FILE_SEPARATOR )
@@ -469,7 +479,7 @@ public class Parser
     public String getArtifactMetdataPath()
     {
         return new StringBuilder()
-                .append( m_group.replaceAll( GROUP_SEPARATOR, FILE_SEPARATOR ) )
+                .append( groupAsPath() )
                 .append( FILE_SEPARATOR )
                 .append( m_artifact )
                 .append( FILE_SEPARATOR )

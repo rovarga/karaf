@@ -30,6 +30,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Pattern;
 
 import org.apache.karaf.bundle.core.BundleService;
 import org.apache.karaf.bundle.core.BundleWatcher;
@@ -46,20 +47,21 @@ import org.slf4j.LoggerFactory;
  */
 public class BundleWatcherImpl implements Runnable, BundleListener, BundleWatcher {
 
-    private final Logger logger = LoggerFactory.getLogger(BundleWatcherImpl.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(BundleWatcherImpl.class);
+    private static final Pattern URL_PATTERN = Pattern.compile("\\*");
 
     private BundleContext bundleContext;
-	private final BundleService bundleService;
-	private final MavenConfigService localRepoDetector;
+    private final BundleService bundleService;
+    private final MavenConfigService localRepoDetector;
 
     private AtomicBoolean running = new AtomicBoolean(false);
     private long interval = 1000L;
-    private List<String> watchURLs = new CopyOnWriteArrayList<String>();
+    private List<String> watchURLs = new CopyOnWriteArrayList<>();
     private AtomicInteger counter = new AtomicInteger(0);
 
     public BundleWatcherImpl(BundleContext bundleContext, MavenConfigService mavenConfigService, BundleService bundleService) {
         this.bundleContext = bundleContext;
-		this.localRepoDetector = mavenConfigService;
+        this.localRepoDetector = mavenConfigService;
         this.bundleService = bundleService;
     }
 
@@ -73,17 +75,18 @@ public class BundleWatcherImpl implements Runnable, BundleListener, BundleWatche
         }
     }
 
+    @Override
     public void run() {
-        logger.debug("Bundle watcher thread started");
+        LOGGER.debug("Bundle watcher thread started");
         int oldCounter = -1;
-        Set<Bundle> watchedBundles = new HashSet<Bundle>();
+        Set<Bundle> watchedBundles = new HashSet<>();
         while (running.get() && watchURLs.size() > 0) {
             if (oldCounter != counter.get()) {
                 oldCounter = counter.get();
                 watchedBundles.clear();
                 for (String bundleURL : watchURLs) {
                     // Transform into regexp
-                    bundleURL = bundleURL.replaceAll("\\*", ".*");
+                    bundleURL = URL_PATTERN.matcher(bundleURL).replaceAll(".*");
                     for (Bundle bundle : bundleService.selectBundles(Collections.singletonList(bundleURL), false)) {
                         if (isMavenSnapshotUrl(getLocation(bundle))) {
                             watchedBundles.add(bundle);
@@ -95,20 +98,21 @@ public class BundleWatcherImpl implements Runnable, BundleListener, BundleWatche
                 // Get the wiring before any in case of a refresh of a dependency
                 FrameworkWiring wiring = bundleContext.getBundle(0).adapt(FrameworkWiring.class);
                 File localRepository = this.localRepoDetector.getLocalRepository();
-                List<Bundle> updated = new ArrayList<Bundle>();
+                List<Bundle> updated = new ArrayList<>();
                 for (Bundle bundle : watchedBundles) {
                     try {
                         updateBundleIfNecessary(localRepository, updated, bundle);
                     } catch (IOException ex) {
-                        logger.error("Error watching bundle.", ex);
+                        LOGGER.error("Error watching bundle.", ex);
                     } catch (BundleException ex) {
-                        logger.error("Error updating bundle.", ex);
+                        LOGGER.error("Error updating bundle.", ex);
                     }
                 }
                 if (!updated.isEmpty()) {
                     try {
                         final CountDownLatch latch = new CountDownLatch(1);
                         wiring.refreshBundles(updated, new FrameworkListener() {
+                            @Override
                             public void frameworkEvent(FrameworkEvent event) {
                                 latch.countDown();
                             }
@@ -120,12 +124,12 @@ public class BundleWatcherImpl implements Runnable, BundleListener, BundleWatche
                     for (Bundle bundle : updated) {
                         try {
                             if (bundle.getHeaders().get(Constants.FRAGMENT_HOST) != null) {
-                                logger.info("[Watch] Bundle {} is a fragment, so it's not started", bundle.getSymbolicName());
+                                LOGGER.info("[Watch] Bundle {} is a fragment, so it's not started", bundle.getSymbolicName());
                             } else {
                                 bundle.start(Bundle.START_TRANSIENT);
                             }
                         } catch (BundleException ex) {
-                            logger.warn("[Watch] Error starting bundle", ex);
+                            LOGGER.warn("[Watch] Error starting bundle", ex);
                         }
                     }
                 }
@@ -137,29 +141,29 @@ public class BundleWatcherImpl implements Runnable, BundleListener, BundleWatche
             }
         }
 
-        if (logger.isDebugEnabled()) {
-            logger.debug("Bundle watcher thread stopped");
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Bundle watcher thread stopped");
         }
     }
 
-    private String getLocation(Bundle bundle) {
+    private static String getLocation(Bundle bundle) {
         String location = bundle.getHeaders().get(Constants.BUNDLE_UPDATELOCATION);
         return location != null ? location : bundle.getLocation();
     }
 
-    private boolean isMavenSnapshotUrl(String url) {
+    private static boolean isMavenSnapshotUrl(String url) {
         return url.startsWith("mvn:") && url.contains("SNAPSHOT");
     }
 
-    private void updateBundleIfNecessary(File localRepository, List<Bundle> updated, Bundle bundle)
+    private static void updateBundleIfNecessary(File localRepository, List<Bundle> updated, Bundle bundle)
         throws BundleException, IOException {
         File location = getBundleExternalLocation(localRepository, bundle);
         if (location != null && location.exists() && location.lastModified() > bundle.getLastModified()) {
             InputStream is = new FileInputStream(location);
             try {
-                logger.info("[Watch] Updating watched bundle: {} ({})", bundle.getSymbolicName(), bundle.getVersion());
+                LOGGER.info("[Watch] Updating watched bundle: {} ({})", bundle.getSymbolicName(), bundle.getVersion());
                 if (bundle.getHeaders().get(Constants.FRAGMENT_HOST) != null) {
-                    logger.info("[Watch] Bundle {} is a fragment, so it's not stopped", bundle.getSymbolicName());
+                    LOGGER.info("[Watch] Bundle {} is a fragment, so it's not stopped", bundle.getSymbolicName());
                 } else {
                     bundle.stop(Bundle.STOP_TRANSIENT);
                 }
@@ -208,21 +212,22 @@ public class BundleWatcherImpl implements Runnable, BundleListener, BundleWatche
 
     /**
      * Return the location of the Bundle inside the local maven repository.
-     * 
+     *
      * @param localRepository the repository where to look for bundle update.
      * @param bundle the bundle to check update.
      * @return the updated file.
      */
-    private File getBundleExternalLocation(File localRepository, Bundle bundle) {
+    private static File getBundleExternalLocation(File localRepository, Bundle bundle) {
         try {
             Parser p = new Parser(getLocation(bundle).substring(4));
             return new File(localRepository.getPath() + File.separator + p.getArtifactPath());
         } catch (MalformedURLException e) {
-            logger.error("Could not parse artifact path for bundle" + bundle.getSymbolicName(), e);
+            LOGGER.error("Could not parse artifact path for bundle" + bundle.getSymbolicName(), e);
         }
         return null;
     }
 
+    @Override
     public void start() {
         bundleContext.addBundleListener(this);
         // start the watch thread
@@ -237,6 +242,7 @@ public class BundleWatcherImpl implements Runnable, BundleListener, BundleWatche
     /**
      * Stop the execution of the thread and releases the singleton instance.
      */
+    @Override
     public void stop() {
         running.set(false);
         bundleContext.removeBundleListener(this);
@@ -262,6 +268,7 @@ public class BundleWatcherImpl implements Runnable, BundleListener, BundleWatche
         return interval;
     }
 
+    @Override
     public void setInterval(long interval) {
         this.interval = interval;
     }
@@ -270,10 +277,10 @@ public class BundleWatcherImpl implements Runnable, BundleListener, BundleWatche
         return running.get();
     }
 
-	@Override
-	public List<Bundle> getBundlesByURL(String urlFilter) {
-        urlFilter = urlFilter.replaceAll("\\*", ".*");
-		return bundleService.selectBundles(Collections.singletonList(urlFilter), false);
-	}
+    @Override
+    public List<Bundle> getBundlesByURL(String urlFilter) {
+        urlFilter = URL_PATTERN.matcher(urlFilter).replaceAll(".*");
+        return bundleService.selectBundles(Collections.singletonList(urlFilter), false);
+    }
 
 }
